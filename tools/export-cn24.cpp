@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <fstream>  // NOLINT(readability/streams)
 #include <iostream>  // NOLINT(readability/streams)
+#include <sstream>
 #include <string>
 
 #include "caffe/caffe.hpp"
@@ -20,6 +21,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   Conv::System::Init();
+  std::stringstream ss;
 
   NetParameter net_param;
   string input_filename(argv[1]);
@@ -27,18 +29,75 @@ int main(int argc, char** argv) {
   std::ofstream output_file(output_filename, std::ios::out | std::ios::binary);
   
   if (!ReadProtoFromBinaryFile(input_filename, &net_param)) {
-    LOG(ERROR) << "Failed to parse input binary file as NetParameter: "
+    LOGERROR << "Failed to parse input binary file as NetParameter: "
                << input_filename;
     return 2;
   }
 
-  LOG(ERROR) << "Processing model: " << net_param.name();
-  LOG(ERROR) << "Layers in this model: " << net_param.layer_size();
+  LOGINFO << "Processing model: " << net_param.name();
+  LOGINFO << "Layers in this model: " << net_param.layer_size();
 
   for(int layer_id = 0; layer_id < net_param.layer_size(); layer_id++) {
     const LayerParameter& layer_param = net_param.layer(layer_id);
-    LOG(ERROR) << "Processing layer " << layer_param.name();
-    for (int i = 0; i < layer_param.blobs_size(); ++i) {
+    LOGINFO << "Processing layer " << layer_param.name();
+    if(layer_param.type().compare("Convolution") == 0) {
+      const ConvolutionParameter& cparam = layer_param.convolution_param();
+      unsigned int kx = 0, ky = 0, sx = 1, sy = 1, px = 0, py = 0, kernels = 0, group = 1;
+
+      // Parse kernel size
+      if(cparam.has_kernel_size()) {
+        kx = cparam.kernel_size(); ky = cparam.kernel_size();
+      } else if(cparam.has_kernel_h() && cparam.has_kernel_w()) {
+        kx = cparam.kernel_w(); ky = cparam.kernel_h();
+      } else {
+        FATAL("Kernel size missing");
+      }
+
+      // Parse padding
+      if(cparam.has_pad()) {
+        px = cparam.pad(); py = cparam.pad();
+      } else if(cparam.has_pad_w() && cparam.has_pad_h()) {
+        px = cparam.pad_w(); py = cparam.pad_h();
+      } else {
+        px = 0; py = 0;
+      }
+
+      // Parse stride
+      if(cparam.has_stride()) {
+        sx = cparam.stride(); sy = cparam.stride();
+      } else if (cparam.has_stride_w() && cparam.has_stride_h()) {
+        sx = cparam.stride_w(); sy = cparam.stride_h();
+      } else {
+        sx = 1; sy = 1;
+      }
+
+      // Parse group
+      group = cparam.group();
+
+      // Parse kernel count
+      kernels = cparam.num_output();
+      
+      ss << "?convolutional size=" << kx << "x" << ky << " kernels=" << kernels;
+      if((sx + sy) > 1)
+        ss << " stride=" << sx << "x" << sy;
+      if((px + py) > 0)
+        ss << " pad=" << px << "x" << py;
+      ss << " group=" << group;
+      ss << "\n";
+    } 
+    else if(layer_param.type().compare("LRN") == 0) {
+      ss << "?lrn\n";
+    }
+    else if(layer_param.type().compare("ReLU") == 0) {
+      ss << "?relu\n";
+    }
+    else if(layer_param.type().compare("Data") == 0) {
+    }
+    else {
+      LOGWARN << "Unknown layer type: " << layer_param.type();
+    }
+
+/*    for (int i = 0; i < layer_param.blobs_size(); ++i) {
       LOG(ERROR) << "Processing blob: " << i;
       Conv::Tensor tensor;
       Blob<float> blob;
@@ -53,11 +112,15 @@ int main(int argc, char** argv) {
       float* source = (float*)blob.cpu_data();
       std::memcpy(target, source, sizeof(float) * width * height * maps * samples);
       tensor.Serialize(output_file);
-    }
+    } */
   }
+
+  std::cout << "\nConfig file output:\n";
+  std::cout << ss.str();
+  std::cout << "\n";
   
   output_file.close();
-  LOG(ERROR) << "Done.";
+  LOGINFO << "Done.";
   LOGEND;
   return 0;
 }
