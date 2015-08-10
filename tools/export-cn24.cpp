@@ -86,12 +86,56 @@ int main(int argc, char** argv) {
       ss << "\n";
     } 
     else if(layer_param.type().compare("LRN") == 0) {
-      ss << "?lrn\n";
+      const LRNParameter& lparam = layer_param.lrn_param();
+      Conv::LocalResponseNormalizationLayer::NormalizationMethod method;
+      float alpha = 1.0, beta = 0.75;
+      unsigned int local_size = 5;
+
+      ss << "?lrn";
+      
+      // Parse alpha and beta
+      if(lparam.has_alpha()) {
+        alpha = lparam.alpha();
+      } 
+      if(lparam.has_beta()) {
+        beta = lparam.beta();
+      } 
+      ss << " alpha=" << alpha << " beta=" << beta;
+
+      // Parse size
+      if(lparam.has_local_size()) {
+        local_size = lparam.local_size();
+      }
+      ss << " size=" << local_size;
+
+      // Parse method
+      if(lparam.has_norm_region()) {
+        if(lparam.norm_region() == LRNParameter::ACROSS_CHANNELS) {
+          method = Conv::LocalResponseNormalizationLayer::ACROSS_CHANNELS;
+        } else if(lparam.norm_region() == LRNParameter::WITHIN_CHANNEL) {
+          method = Conv::LocalResponseNormalizationLayer::WITHIN_CHANNELS;
+        } else {
+          FATAL("Unknown normalization method");
+        }
+      } else {
+        method = Conv::LocalResponseNormalizationLayer::ACROSS_CHANNELS;
+      }
+      switch(method) {
+        case Conv::LocalResponseNormalizationLayer::ACROSS_CHANNELS:
+          ss << " method=across";
+          break;
+        case Conv::LocalResponseNormalizationLayer::WITHIN_CHANNELS:
+          ss << " method=within";
+          break;
+      }
+
+      ss << "\n";
     }
     else if(layer_param.type().compare("ReLU") == 0) {
       ss << "?relu\n";
     }
     else if(layer_param.type().compare("Data") == 0) {
+      // Ignore data layer for now
     }
     else {
       LOGWARN << "Unknown layer type: " << layer_param.type();
