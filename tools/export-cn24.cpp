@@ -39,7 +39,6 @@ int main(int argc, char** argv) {
 
   for(int layer_id = 0; layer_id < net_param.layer_size(); layer_id++) {
     const LayerParameter& layer_param = net_param.layer(layer_id);
-    LOGINFO << "Processing layer " << layer_param.name();
     if(layer_param.type().compare("Convolution") == 0) {
       const ConvolutionParameter& cparam = layer_param.convolution_param();
       unsigned int kx = 0, ky = 0, sx = 1, sy = 1, px = 0, py = 0, kernels = 0, group = 1;
@@ -130,6 +129,51 @@ int main(int argc, char** argv) {
       }
 
       ss << "\n";
+    }
+    else if(layer_param.type().compare("Pooling") == 0) {
+      const PoolingParameter& cparam = layer_param.pooling_param();
+      unsigned int kx = 0, ky = 0, sx = 1, sy = 1, px = 0, py = 0;
+
+      // Parse kernel size
+      if(cparam.has_kernel_size()) {
+        kx = cparam.kernel_size(); ky = cparam.kernel_size();
+      } else if(cparam.has_kernel_h() && cparam.has_kernel_w()) {
+        kx = cparam.kernel_w(); ky = cparam.kernel_h();
+      } else {
+        FATAL("Kernel size missing");
+      }
+
+      // Parse padding
+      if(cparam.has_pad()) {
+        px = cparam.pad(); py = cparam.pad();
+      } else if(cparam.has_pad_w() && cparam.has_pad_h()) {
+        px = cparam.pad_w(); py = cparam.pad_h();
+      } else {
+        px = 0; py = 0;
+      }
+
+      // Parse stride
+      if(cparam.has_stride()) {
+        sx = cparam.stride(); sy = cparam.stride();
+      } else if (cparam.has_stride_w() && cparam.has_stride_h()) {
+        sx = cparam.stride_w(); sy = cparam.stride_h();
+      } else {
+        sx = 1; sy = 1;
+      }
+
+      // Parse pooling method
+      if(cparam.has_pool() && cparam.pool() == PoolingParameter::MAX) {
+      } else {
+        FATAL("Unknown or unsupported pooling operation");
+      }
+
+      if(px != 0 || py != 0)
+        FATAL("Padded max-pooling not supported!");
+      
+      ss << "?amaxpooling size=" << kx << "x" << ky << " stride=" << sx << "x" << sy;
+      ss << "\n";
+
+      
     }
     else if(layer_param.type().compare("ReLU") == 0) {
       ss << "?relu\n";
